@@ -2,6 +2,10 @@
 
 Implémentation d'un AmbientGan conditionnel, cf [AmbientGAN: Generative models from lossy measurements](https://openreview.net/pdf?id=Hy7fDog0b)
 
+## Image de base:
+
+![image de base](https://github.com/llvictorll/AmbientGan/blob/master/img/image_base_sans_bruit.png)
+
 ## Image de base avec bruit:
 
 ![image avec bruit](https://github.com/llvictorll/AmbientGan/blob/master/img/image_base_bruit.png)
