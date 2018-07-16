@@ -23,29 +23,13 @@ def conf():
     netD = NetD_super().to(device)
     optimizerG = optim.Adam(netG.parameters(), 0.0002, betas=(0.5, 0.999))
     optimizerD = optim.Adam(netD.parameters(), 0.0001, betas=(0.5, 0.999))
-    f_bruit = Sup_res1
+    f_bruit = Sup_res2
     epoch = 100
     cuda = True
     param = None
     f = f_bruit(param)
 
-    trainset = MiniCelebADataset("/local/besnier/visage/miniCelebA_64",
-                                 "/local/besnier/visage/mini_idTrain.txt",
-                                 f,
-                                 transforms.Compose([transforms.ToTensor(),
-                                                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                                                     ]))
-
-    testset = MiniCelebADataset("/local/besnier/visage/miniCelebA_64",
-                                "/local/besnier/visage/mini_idTest.txt",
-                                f,
-                                transforms.Compose([transforms.ToTensor(),
-                                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                                                    ]))
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True, num_workers=4, drop_last=True)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=True, num_workers=4, drop_last=True)
-
-    dataset = CelebADatasetSup("/local/besnier/img_align_celeba",
+    dataset = CelebADatasetSup("/net/girlschool/besnier/img_align_celeba",
                                f,
                                transforms.Compose([transforms.Resize(64),
                                                    transforms.ToTensor(),
