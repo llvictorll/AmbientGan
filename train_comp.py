@@ -110,21 +110,21 @@ def main(netG, netDlow, netDhigh, f_bruit, epoch, device, param, cuda, dataloade
                 (lossDF + lossDT).backward()
                 optimizerDhigh.step()
 
-
             ######################
             # train G
             ######################
             optimizerG.zero_grad()
+
             # optim with high image
-            losshigh = 0
             if xbh is not None:
                 xbh = xbh.cuda()
                 outputGhigh = netG(xbh)
                 outputDhigh = netDhigh(outputGhigh)
                 losshigh = F.binary_cross_entropy_with_logits(outputDhigh, real_label)
-
+            else:
+                losshigh = 0
             # optim with low image
-            outputGlow = module_bruit(outputGhigh, b=True)
+            outputGlow = module_bruit(netG(xbf), b=True)
             outputDlow = netDlow(outputGlow)
             losslow = F.binary_cross_entropy_with_logits(outputDlow, real_label)
 
