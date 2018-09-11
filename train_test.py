@@ -16,14 +16,14 @@ ex = Experiment('test')
 @ex.config
 def conf():
     device = 'cuda:0'
-    netG = NetG_super().to(device)
+    netG = NetG_pix().to(device)
     netDlow = NetD_super('low').to(device)
     netDhigh = NetD_super('high').to(device)
     optimizerG = optim.Adam(netG.parameters(), 0.0002, betas=(0.5, 0.999))
     optimizerDlow = optim.Adam(netDlow.parameters(), 0.0001, betas=(0.5, 0.999))
     optimizerDhigh = optim.Adam(netDhigh.parameters(), 0.0001, betas=(0.5, 0.999))
     f_bruit = Sup_res2
-    epoch = 100
+    epoch = 15
     cuda = True
     param = None
     f = f_bruit(param)
@@ -46,12 +46,13 @@ def conf():
 
     dataloaderF = torch.utils.data.DataLoader(datasetF, batch_size=64, shuffle=True, num_workers=1, drop_last=True)
 
-@ex.automain
-def main(netG, netDlow, netDhigh, f_bruit, epoch, device, param, cuda, dataloaderH, dataloaderF, optimizerG, optimizerDlow, optimizerDhigh):
+@ex.main
+def main(netG, netDlow, netDhigh, f_bruit, epoch, device, param, cuda, dataloaderH, dataloaderF, optimizerG, optimizerDlow, optimizerDhigh, l1, l2, l3):
     netG.train()
     netDlow.train()
     netDhigh.train()
-    sauvegarde_init()
+    file = 'train_test_pixel_shuffle/'
+    sauvegarde_init(file)
     cpt = 0
     mse = []
     ref = []
@@ -63,9 +64,9 @@ def main(netG, netDlow, netDhigh, f_bruit, epoch, device, param, cuda, dataloade
     for _ in bar_epoch:
         for i, (xf, xbf), (xh, xbh) in zip_longest(tqdm(range(len(dataloaderF))), dataloaderF, dataloaderH, fillvalue=(None, None)):
             if turn:
-                print_img(xf, "référence_femme")
+                print_img(xf,"référence_femme", file)
                 save_xbf = xbf
-                print_img(save_xbf, 'image_de_bruit_femme')
+                print_img(save_xbf, 'image_de_bruit_femme',file)
                 turn = False
                 if cuda:
                     save_xbf = save_xbf.cuda()
@@ -124,11 +125,14 @@ def main(netG, netDlow, netDhigh, f_bruit, epoch, device, param, cuda, dataloade
             else:
                 losshigh = 0
             # optim with low image
-            outputGlow = module_bruit(netG(xbf), b=True)
+            outputG = netG(xbf)
+            outputGlow = module_bruit(outputG, b=True)
             outputDlow = netDlow(outputGlow)
             losslow = F.binary_cross_entropy_with_logits(outputDlow, real_label)
 
-            (losshigh + 0.01*losslow).backward()
+            loss_sup = F.mse_loss(netG(outputGlow), outputG)
+
+            (l1*losshigh + l2*losslow + l3 * loss_sup).backward()
             optimizerG.step()
 
             #####################
@@ -146,10 +150,10 @@ def main(netG, netDlow, netDhigh, f_bruit, epoch, device, param, cuda, dataloade
                                    "qualité": np.array(mse).mean(),
                                    "ref": np.array(ref).mean()})
 
-            sauvegarde(np.array(dTrue).mean(), np.array(dFalse).mean(), np.array(mse).mean(), np.array(ref).mean())
+            sauvegarde(file,np.array(dTrue).mean(), np.array(dFalse).mean(), np.array(mse).mean(), np.array(ref).mean())
 
             if i % 250 == 0:
-                printG(save_xbf, cpt, netG)
+                printG(save_xbf, cpt, netG, file)
                 cpt += 1
                 mse = []
                 ref = []
@@ -164,3 +168,8 @@ def main(netG, netDlow, netDhigh, f_bruit, epoch, device, param, cuda, dataloade
             # truc6 = losslow * 0.1 and len(H)/4
             # truc7 = losslow * 0.1 and len(H)/8
             # truc8 = losslow * 0.1 and len(H)/16
+            # truc9 = losshigh + 0.01*losslow + 10*loss_sup
+
+
+if __name__ == '__main__':
+    ex.run(config_updates={'l1': 1, 'l2': 0.1, 'l3': 1})

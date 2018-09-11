@@ -19,14 +19,15 @@ ex = Experiment('test')
 @ex.config
 def conf():
     device = 'cuda:0'
-    netG = NetG_super().to(device)
-    netD = NetD_super().to(device)
+    netG = NetG_srgan().to(device)
+    netD = NetD_patch().to(device)
     optimizerG = optim.Adam(netG.parameters(), 0.0002, betas=(0.5, 0.999))
-    optimizerD = optim.Adam(netD.parameters(), 0.0001, betas=(0.5, 0.999))
-    f_bruit = Sup_res3
+    optimizerD = optim.Adam(netD.parameters(), 0.001, betas=(0.5, 0.999))
+    f_bruit = Sup_res2
     epoch = 100
     cuda = True
     param = None
+    file = 'train_cycle/train_path'
     f = f_bruit(param)
 
     dataset = CelebADataset("/net/girlschool/besnier/CelebA_dataset/img_align_celeba",
@@ -40,10 +41,12 @@ def conf():
 
 
 @ex.automain
-def main(netG, netD, f_bruit, epoch, param, cuda,device, dataloader, optimizerG, optimizerD):
+def main(netG, netD, f_bruit, epoch, param, cuda,device, dataloader, optimizerG, optimizerD, file):
+    print(file)
+    save_net(file, netG, netD)
     netG.train()
     netD.train()
-    sauvegarde_init()
+    sauvegarde_init(file)
     cpt = 0
     dTrue = []
     dFalse = []
@@ -52,11 +55,23 @@ def main(netG, netD, f_bruit, epoch, param, cuda,device, dataloader, optimizerG,
     module_bruit = f_bruit(param).to(device)
     turn = True
     bar_epoch = tqdm(range(epoch))
+    bar_data = tqdm(range(len(dataloader)))
     for _ in bar_epoch:
-        for i, (x, xb) in zip(tqdm(range(len(dataloader))), dataloader):
+        turnn = True
+        for i, (x, xb) in zip(bar_data, dataloader):
+            if turn:
+                save_xb = xb
+                print_img(save_xb, 'image_de_base_bruit', file)
+                print_img(x, 'image_de_base_sans_bruit', file)
+                turn = False
+                if cuda:
+                    save_xb = save_xb.cuda()
+            if turnn:
+                turnn = False
+                continue
 
-            real_label = torch.FloatTensor(x.size(0)).fill_(.9).to(device)
-            fake_label = torch.FloatTensor(x.size(0)).fill_(.1).to(device)
+            real_label = torch.FloatTensor(x.size(0)*9).fill_(.9).to(device)
+            fake_label = torch.FloatTensor(x.size(0)*9).fill_(.1).to(device)
 
             xref = module_bruit(x, b=True)
             x2 = netG(xref)
@@ -66,14 +81,6 @@ def main(netG, netD, f_bruit, epoch, param, cuda,device, dataloader, optimizerG,
                 xb2 = xb2.cuda()
                 x = x.cuda()
                 x2 = x2.cuda()
-            if turn:
-                save_xb = xb
-                save_xb2 = xb2
-                print_img(save_xb, 'image_de_base_bruit')
-                print_img(x, 'image_de_base_sans_bruit')
-                turn = False
-                if cuda:
-                    save_xb = save_xb.cuda()
 
             # train D
             optimizerD.zero_grad()
@@ -97,7 +104,7 @@ def main(netG, netD, f_bruit, epoch, param, cuda,device, dataloader, optimizerG,
             lossBruit = F.binary_cross_entropy_with_logits(outputDbruit, real_label)
             lossSupervise = F.mse_loss(netG(xb2), x2)
 
-            (lossBruit+10*lossSupervise).backward()
+            (lossBruit+lossSupervise).backward()
             optimizerG.step()
 
             #test
@@ -106,15 +113,15 @@ def main(netG, netD, f_bruit, epoch, param, cuda,device, dataloader, optimizerG,
             mse.append(F.mse_loss(netG(xb).detach(), x))
             ref.append(F.mse_loss(x, F.upsample(xb, scale_factor=2)))
 
-            bar_epoch.set_postfix({"Dataset": np.array(dTrue).mean(),
-                                   "G": np.array(dFalse).mean(),
-                                   "qualité": np.array(mse).mean(),
-                                   "ref": np.array(ref).mean()})
+            bar_epoch.set_postfix({"Dset": np.array(dTrue).mean(),
+                                   "G": np.array(dFalse).mean()})
+            bar_data.set_postfix({"qual": np.array(mse).mean(),
+                                  "ref": np.array(ref).mean()})
 
-            sauvegarde(np.array(dTrue).mean(), np.array(dFalse).mean(), np.array(mse).mean(), np.array(ref).mean())
+            sauvegarde(file, np.array(dTrue).mean(), np.array(dFalse).mean(), np.array(mse).mean(), np.array(ref).mean())
 
-            if i % 250 == 0:
-                printG(save_xb, cpt, netG)
+            if i % 250 == 1:
+                printG(save_xb, cpt, netG, file)
                 cpt += 1
                 dTrue = []
                 dFalse = []
